@@ -1,17 +1,19 @@
-import { Component } from '@angular/core';
+import {Component, inject} from '@angular/core';
 import { RouterOutlet } from '@angular/router';
+import {Title} from "@angular/platform-browser";
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, ],
   template: `
-    <h1>Welcome to {{title}}!</h1>
-
     <router-outlet />
   `,
   styles: [],
 })
 export class AppComponent {
   title = 'angularstart-quicklists';
+  constructor(private pageTitle: Title) {
+    pageTitle.setTitle(this.title);
+  }
 }
