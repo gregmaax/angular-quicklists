@@ -1,9 +1,10 @@
 import {computed, effect, inject, Injectable, signal} from '@angular/core';
 import {AddChecklistItem, ChecklistItem, EditChecklistItem, RemoveChecklistItem} from "../interfaces/checklist-item";
-import {Subject} from "rxjs";
+import {map, merge, Subject} from "rxjs";
 import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import {StorageService} from "./storage.service";
 import {RemoveChecklist} from "../interfaces/checklist";
+import {connect} from "ngxtension/connect";
 
 export interface ChecklistItemState {
   checklistItems: ChecklistItem[];
@@ -37,87 +38,48 @@ export class ChecklistItemService {
 
   constructor() {
     //REDUCERS
-    //add$
-    this.add$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistItem) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: [...state.checklistItems,
-            {
-              ...checklistItem.item,
-              id: Date.now().toString(),
-              checklistId: checklistItem.checklistId,
-              checked: false,
-            }
-          ]
-        })
+    const nextState$ = merge(
+      this.checklistItemsLoaded$.pipe(
+        map(
+          (checklistItems) => ({checklistItems, loaded: true})
+        )
       )
     );
-    //toggle$
-    this.toggle$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistItemId) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: state.checklistItems.map(
-            (item) => item.id === checklistItemId ? {...item, checked: !item.checked} : item
-          )
-        })
-      )
-    );
-    //reset$
-    this.reset$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistId) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: state.checklistItems.map(
-            (item) => item.checklistId === checklistId ? {...item, checked: false} : item
-          )
-        })
-      )
-    );
-    //checklistItemsLoaded$
-    this.checklistItemsLoaded$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistItems) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems,
-          loaded: true
-        })
-      )
-    );
-    //update$
-    this.update$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistItem) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: state.checklistItems.map(
-            (item) => item.id === checklistItem.id ? {...item, title: checklistItem.data.title} : item
-          )
-        })
-      )
-    );
-    //delete$
-    this.delete$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistItemId) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: state.checklistItems.filter(
-            (item) => item.id !== checklistItemId
-          )
-        })
-      )
-    );
-    //checklistRemoved$
-    this.checklistRemoved$.pipe(takeUntilDestroyed()).subscribe(
-      (checklistId) => this.state.update(
-        (state) => ({
-          ...state,
-          checklistItems: state.checklistItems.filter(
-            (item) => item.id !== checklistId
-          )
-        })
-      )
-    )
+
+    connect(this.state)
+      .with(nextState$)
+      .with(this.add$, (state, checklistItem) => ({
+        checklistItems: [
+          ...state.checklistItems,
+          {
+            ...checklistItem.item,
+            id: Date.now().toString(),
+            checklistId: checklistItem.checklistId,
+            checked: false
+          }
+        ],
+      })).with(this.update$, (state, update) => ({
+      checklistItems: state.checklistItems.map((item) => item.id === update.id ? {...item, title: update.data.title} : item)
+    }))
+      .with(this.delete$, (state, id) => ({
+        checklistItems: state.checklistItems.filter((item) => item.id !== id)
+      }))
+      .with(this.toggle$, (state, checklistItemId) => ({
+        checklistItems: state.checklistItems.map(
+          (item) => item.id === checklistItemId ? {...item, checked: !item.checked} : item
+        )
+      }))
+      .with(this.reset$, (state, checklistId) => ({
+        checklistItems: state.checklistItems.map(
+          (item) => item.checklistId === checklistId ? {...item, checked: false} : item
+        )
+      }))
+      .with(this.checklistRemoved$, (state, checklistId) => ({
+        checklistItems: state.checklistItems.filter(
+          (item) => item.checklistId !== checklistId
+        )
+      }));
+
     //EFFECTS for storage
     effect(() => {
       if (this.loaded()){
